@@ -28,7 +28,7 @@ def load_dataset(full_path):
 	cat_ix = X.select_dtypes(include=['object', 'bool']).columns
 	num_ix = X.select_dtypes(include=['int64', 'float64']).columns
 	# label encode the target variable to have the classes 0 and 1
-	y = LabelEncoder().fit_transform(y)
+	# y = LabelEncoder().fit_transform(y)
 	return X.values, y, cat_ix, num_ix
  
 # calculate f2-measure
@@ -46,7 +46,7 @@ def evaluate_model(X, y, model):
 	return scores
  
 # define the location of the dataset
-full_path = 'german.csv'
+full_path = 'german1.csv'
 # load the dataset
 X, y, cat_ix, num_ix = load_dataset(full_path)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.10, random_state=1, stratify=y)
@@ -67,3 +67,11 @@ roc_train = roc_auc_score(y_train, pipeline.predict(X_train))
 print("ROC score on Train Data :", roc_train)
 roc_test = roc_auc_score(y_test, pipeline.predict(X_test))
 print("ROC score on Test Data :", roc_test)
+
+
+#%%
+# save the model
+import pickle
+pickle.dump(pipeline, open("model.pkl", "wb"))
+
+
