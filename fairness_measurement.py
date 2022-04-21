@@ -10,7 +10,7 @@ from sklearn.metrics import confusion_matrix #to plot some parameters in seaborn
 
 # %%
 #Importing the data
-df_credit = pd.read_csv("test_file.csv")
+df_credit = pd.read_csv("test_file_fairness2.csv")
 
 # do not need to convert sex
 # def convertSex(age_cat):

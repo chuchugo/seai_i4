@@ -115,4 +115,4 @@ test_dataframe = pd.merge(test_dataframe, pd.DataFrame(y_pred_proba_test).reset_
 del test_dataframe[test_dataframe.columns[0]]
 test_dataframe = test_dataframe.drop(columns=["index", "index_y"])
 
-test_dataframe.to_csv("test_file_fairness2", index=False)
+test_dataframe.to_csv("test_file_fairness2.csv", index=False)
