@@ -11,7 +11,7 @@ from aif360.metrics import BinaryLabelDatasetMetric
 from aif360.algorithms.preprocessing import Reweighing
 from numpy import mean
 from numpy import std
-from pandas import read_csv
+from pandas import Categorical, read_csv
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import StandardScaler
@@ -28,40 +28,70 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
 import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix
+import aif360.datasets as data
 
 from IPython.display import Markdown, display
 import pandas as pd
 
-dataset_orig = GermanDataset(
-    protected_attribute_names=['age'],           # this dataset also contains protected
-                                                 # attribute for "sex" which we do not
-                                                 # consider in this evaluation
-    privileged_classes=[lambda x: x >= 25],      # age >=25 is considered privileged
-    features_to_drop=['personal_status', 'sex'] # ignore sex-related attributes
-)
+
+def convertSex(age_cat):
+    if age_cat == 'A91' or age_cat =="A94" or age_cat =='A93':
+        return 'male'
+    else:
+        return'female'
+
+def load_dataset(full_path):
+    # load the dataset as a numpy array
+    dataframe = read_csv(full_path)
+    # split into inputs and outputs
+    # dataframe.astype({'duration': 'int64'}).dtypes
+    dataframe = pd.read_csv("german.csv")
+    features_dataframe = dataframe.iloc[:,:-1]
+    label_dataframe = dataframe.iloc[:,-1:]
+    features_dataframe['Sex_cat'] = features_dataframe['Sex'].apply(convertSex)
+    interval = (18, 25, 35, 60, 120)
+
+    cats = ['Student', 'Young', 'Adult', 'Senior']
+    features_dataframe["Age_cat"] = pd.cut(features_dataframe.Age, interval, labels=cats)
+
+    features_dataframe = features_dataframe.drop(columns=["Age","Sex"])
+    X, y = features_dataframe, label_dataframe
+    orig_dataset = pd.merge(pd.DataFrame(X).reset_index(), pd.DataFrame(y).reset_index(), left_index=True, right_index=True, how="outer")
+    orig_dataset = orig_dataset.drop(columns=["index_y", "index_x"])
+    return orig_dataset
+
+dataset = load_dataset('german.csv')
+dataset_orig = data.StandardDataset(dataset,
+    label_name='Risk',
+    favorable_classes=[1],
+    protected_attribute_names=['Age_cat'],                                                                                                         
+    privileged_classes=[lambda x: x == 'Young' or x == 'Adult' or x=='Senior'],     
+    features_to_drop=['Sex_cat'],
+    categorical_features=['Checking_account', 'credit_history', 'purpose', 'savings_account', 
+        'employment_years', 'gurantors', 'Property', 'Installment_plans',
+        'housing', 'job', 'telephone', 'foreign_worker', 'Sex_cat']
+    )
 
 dataset_orig_train, dataset_orig_test = dataset_orig.split([0.7], shuffle=True)
 
-privileged_groups = [{'age': 1}]
-print(privileged_groups)
-unprivileged_groups = [{'age': 0}]
+privileged_groups = [{'Age_cat': 1}]
+unprivileged_groups = [{'Age_cat': 0}]
 
-metric_orig_train = BinaryLabelDatasetMetric(dataset_orig_train, 
+metric_orig = BinaryLabelDatasetMetric(dataset_orig, 
                                              unprivileged_groups=unprivileged_groups,
                                              privileged_groups=privileged_groups)
 display(Markdown("#### Original training dataset"))
-print("Difference in mean outcomes between unprivileged and privileged groups = %f" % metric_orig_train.mean_difference())
+print("Difference in mean outcomes between unprivileged and privileged groups = %f" % metric_orig.mean_difference())
 
 RW = Reweighing(unprivileged_groups=unprivileged_groups,
                 privileged_groups=privileged_groups)
-dataset_transf_train = RW.fit_transform(dataset_orig_train)
+dataset_transf = RW.fit_transform(dataset_orig)
 
-metric_transf_train = BinaryLabelDatasetMetric(dataset_transf_train, 
+metric_transf = BinaryLabelDatasetMetric(dataset_transf, 
                                                unprivileged_groups=unprivileged_groups,
                                                privileged_groups=privileged_groups)
 display(Markdown("#### Transformed training dataset"))
-print("Difference in mean outcomes between unprivileged and privileged groups = %f" % metric_transf_train.mean_difference())
+print("Difference in mean outcomes between unprivileged and privileged groups = %f" % metric_transf.mean_difference())
 
 # calculate f2-measure
 def f2_measure(y_true, y_pred):
@@ -76,8 +106,11 @@ def evaluate_model(X, y, model):
 	# evaluate model
 	scores = cross_val_score(model, X, y, scoring=metric, cv=cv, n_jobs=-1)
 	return scores
-
-X_train, X_test, y_train, y_test = train_test_split(dataset_transf_train.features, dataset_transf_train.labels, test_size=0.30, random_state=1, stratify=dataset_transf_train.labels)
+scale_transf = StandardScaler()
+X_train = scale_transf.fit_transform(dataset_transf.features)
+y_train = dataset_transf.labels.ravel()
+indices = np.arange(1000)
+X_train, X_test, y_train, y_test, indices_train, indices_test = train_test_split(dataset_transf.features, dataset_transf.labels,  indices, test_size=0.30, random_state=1, stratify=dataset_transf.labels)
 # define model to evaluate
 model = RidgeClassifier()
 # define the data sampling
@@ -110,9 +143,12 @@ plt.ylabel('True Positive Test Rate')
 plt.xlabel('False Positive Test Rate')
 plt.show()
 
-test_dataframe = pd.merge(pd.DataFrame(X_test).reset_index(), pd.DataFrame(y_test).reset_index(), left_index=True, right_index=True, how="outer")
+test_dataframe = dataset.iloc[indices_test]
+test_dataframe = test_dataframe.iloc[:,:-1]
+
+test_dataframe = pd.merge(pd.DataFrame(test_dataframe).reset_index(), pd.DataFrame(y_test).reset_index(), left_index=True, right_index=True, how="outer")
 test_dataframe = pd.merge(test_dataframe, pd.DataFrame(y_pred_proba_test).reset_index(), left_index=True, right_index=True, how="outer")
 del test_dataframe[test_dataframe.columns[0]]
 test_dataframe = test_dataframe.drop(columns=["index", "index_y"])
 
-test_dataframe.to_csv("test_file_fairness2.csv", index=False)
+test_dataframe.to_csv("test_file_fairness2", index=False)
