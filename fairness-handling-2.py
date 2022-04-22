@@ -48,34 +48,44 @@ def load_dataset(full_path):
     dataframe = pd.read_csv("german.csv")
     features_dataframe = dataframe.iloc[:,:-1]
     label_dataframe = dataframe.iloc[:,-1:]
-    features_dataframe['Sex_cat'] = features_dataframe['Sex'].apply(convertSex)
+
+    features_dataframe['Sex_cat'] = 'male'
+    features_dataframe.loc[features_dataframe['Sex'] == 'A92', 'Sex_cat'] = 'female'
+
     interval = (18, 25, 35, 60, 120)
 
     cats = ['Student', 'Young', 'Adult', 'Senior']
     features_dataframe["Age_cat"] = pd.cut(features_dataframe.Age, interval, labels=cats)
 
-    features_dataframe = features_dataframe.drop(columns=["Age","Sex"])
+    # features_dataframe = features_dataframe.drop(columns=["Age","Sex"])
     X, y = features_dataframe, label_dataframe
-    orig_dataset = pd.merge(pd.DataFrame(X).reset_index(), pd.DataFrame(y).reset_index(), left_index=True, right_index=True, how="outer")
+    orig_dataset = pd.merge(
+        pd.DataFrame(X).reset_index(),
+        pd.DataFrame(y).reset_index(), 
+        left_index=True, 
+        right_index=True, 
+        how="outer")
+
     orig_dataset = orig_dataset.drop(columns=["index_y", "index_x"])
+    orig_dataset["Risk"] = LabelEncoder().fit_transform(orig_dataset["Risk"])
     return orig_dataset
 
 dataset = load_dataset('german.csv')
 dataset_orig = data.StandardDataset(dataset,
     label_name='Risk',
     favorable_classes=[1],
-    protected_attribute_names=['Age_cat'],                                                                                                         
-    privileged_classes=[lambda x: x == 'Young' or x == 'Adult' or x=='Senior'],     
-    features_to_drop=['Sex_cat'],
+    protected_attribute_names=['Sex_cat'],                                                                                                         
+    privileged_classes=[lambda x: x == 'male'],     
+    features_to_drop=['Sex'],
     categorical_features=['Checking_account', 'credit_history', 'purpose', 'savings_account', 
         'employment_years', 'gurantors', 'Property', 'Installment_plans',
-        'housing', 'job', 'telephone', 'foreign_worker', 'Sex_cat']
+        'housing', 'job', 'telephone', 'foreign_worker','Age_cat']
     )
 
 dataset_orig_train, dataset_orig_test = dataset_orig.split([0.7], shuffle=True)
 
-privileged_groups = [{'Age_cat': 1}]
-unprivileged_groups = [{'Age_cat': 0}]
+privileged_groups = [{'Sex_cat': 1}]
+unprivileged_groups = [{'Sex_cat': 0}]
 
 metric_orig = BinaryLabelDatasetMetric(dataset_orig, 
                                              unprivileged_groups=unprivileged_groups,
@@ -126,7 +136,7 @@ roc_test = roc_auc_score(y_test, pipeline.predict(X_test))
 print("ROC score on Test Data :", roc_test)
 
 y_pred_proba = pipeline.predict(X_train)
-fpr_train, tpr_train, _ = metrics.roc_curve(y_train,  y_pred_proba, pos_label=2)
+fpr_train, tpr_train, _ = metrics.roc_curve(y_train,  y_pred_proba)
 
 #create ROC curve
 plt.plot(fpr_train,tpr_train)
@@ -135,7 +145,7 @@ plt.xlabel('False Positive Train Rate')
 plt.show()
 
 y_pred_proba_test = pipeline.predict(X_test)
-fpr_test, tpr_test, _ = metrics.roc_curve(y_test,  y_pred_proba_test, pos_label=2)
+fpr_test, tpr_test, _ = metrics.roc_curve(y_test,  y_pred_proba_test)
 
 #create ROC curve
 plt.plot(fpr_test,tpr_test)

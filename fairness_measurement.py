@@ -10,7 +10,7 @@ from sklearn.metrics import confusion_matrix #to plot some parameters in seaborn
 
 # %%
 #Importing the data
-df_credit = pd.read_csv("test_file_fairness2.csv")
+df_credit = pd.read_csv("test_file")
 
 # do not need to convert sex
 # def convertSex(age_cat):
@@ -72,6 +72,7 @@ def changeAgeCategory(age_cat):
         return 'Student'
 
 df_age_test1['Age_cat'] = df_age_test1['Age_cat'].apply(changeAgeCategory)
+# df_sex_test1['Age_cat'] = df_sex_test1['Age_cat'].apply(lambda x: 'male' if x == 'female' else 'female')
 
 # %%
 import pickle
@@ -79,9 +80,9 @@ import pickle
 model = pickle.load(open("model.pkl", "rb"))
 print("1. Anti classifications")
 # to make predictions based on test data , and test1 data and to see if the result are different
-df_age_test=df_age_test.iloc[:,:20]
+df_age_test=df_age_test.iloc[:,:22]
 y_pred_age_test = model.predict(df_age_test)
-df_age_test1=df_age_test1.iloc[:,:20]
+df_age_test1=df_age_test1.iloc[:,:22]
 y_pred_age_test1 = model.predict(df_age_test1)
 df_age_test['Age_cat'] == df_age_test1['Age_cat']
 
@@ -95,9 +96,9 @@ age_same_results_ratio
 print("age_same_results_ratio")
 print(age_same_results_ratio)
 #%%
-df_sex_test=df_sex_test.iloc[:,:20]
+df_sex_test=df_sex_test.iloc[:,:22]
 y_pred_sex_test = model.predict(df_sex_test)
-df_sex_test1=df_sex_test1.iloc[:,:20]
+df_sex_test1=df_sex_test1.iloc[:,:22]
 y_pred_sex_test1 = model.predict(df_sex_test1)
 df_sex_test1['Sex_cat']==df_sex_test['Sex_cat']
 df = pd.DataFrame()

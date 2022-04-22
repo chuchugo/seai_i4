@@ -22,8 +22,8 @@ import pandas as pd
 import numpy as np
 
 
-def convertSex(age_cat):
-    if age_cat == 'A91' or age_cat =="A94" or age_cat =='A93':
+def convertSex(row):
+    if row['Sex'] == 'A91' or row['Sex'] =="A94" or row['Sex'] =='A93':
         return 'male'
     else:
         return'female'
@@ -37,13 +37,16 @@ def load_dataset(full_path):
     dataframe = pd.read_csv("german.csv")
     features_dataframe = dataframe.iloc[:,:-1]
     label_dataframe = dataframe.iloc[:,-1:]
-    features_dataframe['Sex_cat'] = features_dataframe['Sex'].apply(convertSex)
+    features_dataframe.loc[features_dataframe['Sex'] == 'A91', 'Sex_cat'] = 'male'
+    features_dataframe.loc[features_dataframe['Sex'] == 'A94', 'Sex_cat'] = 'male' 
+    features_dataframe.loc[features_dataframe['Sex'] == 'A93', 'Sex_cat'] = 'male'
+    features_dataframe.loc[features_dataframe['Sex'] == 'A92', 'Sex_cat'] = 'female'
     interval = (18, 25, 35, 60, 120)
-
+    # features_dataframe = features_dataframe.rename(columns={'Sex':'Sex_cat'})
     cats = ['Student', 'Young', 'Adult', 'Senior']
     features_dataframe["Age_cat"] = pd.cut(features_dataframe.Age, interval, labels=cats)
-
-    features_dataframe = features_dataframe.drop(columns=["Age","Sex"])
+    features = features_dataframe.copy()
+    features_dataframe = features_dataframe.drop(columns=["Age","Sex","Sex_cat"])
     X, y = features_dataframe, label_dataframe
 
     # select categorical and numerical features
@@ -51,8 +54,7 @@ def load_dataset(full_path):
     num_ix = X.select_dtypes(include=['int64', 'float64']).columns
     # label encode the target variable to have the classes 0 and 1
     y = LabelEncoder().fit_transform(y)
-    print(X)
-    return X, y, cat_ix, num_ix
+    return features, X, y, cat_ix, num_ix
  
 # # calculate f2-measure
 def f2_measure(y_true, y_pred):
@@ -71,14 +73,15 @@ def evaluate_model(X, y, model):
 # define the location of the dataset
 full_path = 'german.csv'
 # load the dataset
-X, y, cat_ix, num_ix = load_dataset(full_path)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.10, random_state=1, stratify=y)
+features, X, y, cat_ix, num_ix = load_dataset(full_path)
+indices = np.arange(1000)
+X_train, X_test, y_train, y_test, indices_train, indices_test = train_test_split(X, y, indices, test_size=0.10, random_state=1, stratify=y)
 # evaluate the model and store results
 
-X_train_column = X_train
-X_test_column = X_test
-X_train = X_train_column.drop(columns=['Age_cat'])
-X_test = X_test_column.drop(columns=['Age_cat'])
+# X_train_column = X_train
+# X_test_column = X_test
+# X_train = X_train_column.drop(columns=['Sex_cat'])
+# X_test = X_test_column.drop(columns=['Sex_cat'])
 # define model to evaluate
 model = RidgeClassifier()
 # define the data sampling
@@ -86,7 +89,7 @@ sampling = SMOTEENN(enn=EditedNearestNeighbours(sampling_strategy='majority'))
 # one hot encode categorical, normalize numerical
 ct = ColumnTransformer([('c',OneHotEncoder(),cat_ix), ('n',StandardScaler(),num_ix)])
 # scale, then sample, then fit model
-pipeline = Pipeline(steps=[('t',ct), ('s', sampling), ('m',model)])
+pipeline = Pipeline(steps=[('t',ct), ('m',model)])
 
 scores = evaluate_model(X_train, np.ravel(y_train), pipeline)
 print('Cross Validation Score %.3f (%.3f)' % (mean(scores), std(scores)))
@@ -118,7 +121,9 @@ plt.show()
 
 # frames = [pd.DataFrame(X_test), pd.DataFrame(y_test), pd.DataFrame(y_pred_proba_test)]
 # test_dataframe = pd.concat(frames)
-test_dataframe = pd.merge(pd.DataFrame(X_test_column).reset_index(), pd.DataFrame(y_test).reset_index(), left_index=True, right_index=True, how="outer")
+
+test_dataframe = features.iloc[indices_test]
+test_dataframe = pd.merge(pd.DataFrame(test_dataframe).reset_index(), pd.DataFrame(y_test).reset_index(), left_index=True, right_index=True, how="outer")
 test_dataframe = pd.merge(test_dataframe, pd.DataFrame(y_pred_proba_test).reset_index(), left_index=True, right_index=True, how="outer")
 del test_dataframe[test_dataframe.columns[0]]
 test_dataframe = test_dataframe.drop(columns=["index", "index_y"])

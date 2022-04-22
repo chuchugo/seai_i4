@@ -68,10 +68,10 @@ def evaluate_model(X, y, model):
     return scores
  
 # define the location of the dataset
-full_path = 'german1.csv'
+full_path = 'german.csv'
 # load the dataset
 X, y, cat_ix, num_ix = load_dataset(full_path)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.10, random_state=1, stratify=y)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=1, stratify=y)
 # define model to evaluate
 model = RidgeClassifier()
 # define the data sampling
@@ -79,7 +79,7 @@ sampling = SMOTEENN(enn=EditedNearestNeighbours(sampling_strategy='majority'))
 # one hot encode categorical, normalize numerical
 ct = ColumnTransformer([('c',OneHotEncoder(),cat_ix), ('n',StandardScaler(),num_ix)])
 # scale, then sample, then fit model
-pipeline = Pipeline(steps=[('t',ct), ('s', sampling), ('m',model)])
+pipeline = Pipeline(steps=[('t',ct), ('m',model)])
 # evaluate the model and store results
 scores = evaluate_model(X_train, np.ravel(y_train), pipeline)
 print('Cross Validation Score %.3f (%.3f)' % (mean(scores), std(scores)))
@@ -108,8 +108,6 @@ plt.ylabel('True Positive Test Rate')
 plt.xlabel('False Positive Test Rate')
 plt.show()
 
-#%%
-# save test data in csv file
 # frames = [pd.DataFrame(X_test), pd.DataFrame(y_test), pd.DataFrame(y_pred_proba_test)]
 # test_dataframe = pd.concat(frames)
 test_dataframe = pd.merge(pd.DataFrame(X_test).reset_index(), pd.DataFrame(y_test).reset_index(), left_index=True, right_index=True, how="outer")
@@ -117,10 +115,4 @@ test_dataframe = pd.merge(test_dataframe, pd.DataFrame(y_pred_proba_test).reset_
 del test_dataframe[test_dataframe.columns[0]]
 test_dataframe = test_dataframe.drop(columns=["index", "index_y"])
 
-test_dataframe.to_csv("test_file.csv", index=False)
-
-
-#%%
-#save model as a pickle file
-import pickle
-pickle.dump(pipeline, open("model.pkl", "wb"))
+test_dataframe.to_csv("test_file", index=False)

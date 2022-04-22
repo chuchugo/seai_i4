@@ -6,9 +6,6 @@ sys.path.insert(1, "../")
 import numpy as np
 np.random.seed(0)
 
-from aif360.datasets import GermanDataset
-from aif360.metrics import BinaryLabelDatasetMetric
-from aif360.algorithms.preprocessing import DisparateImpactRemover
 from numpy import mean
 from numpy import std
 from pandas import Categorical, read_csv
@@ -17,13 +14,9 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.metrics import fbeta_score
 from sklearn.metrics import make_scorer
-from sklearn.linear_model import LogisticRegression, RidgeClassifier
-from imblearn.pipeline import Pipeline
-from imblearn.combine import SMOTEENN
-from imblearn.under_sampling import EditedNearestNeighbours
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
@@ -50,34 +43,36 @@ def load_dataset(full_path):
     dataframe = pd.read_csv("german.csv")
     features_dataframe = dataframe.iloc[:,:-1]
     label_dataframe = dataframe.iloc[:,-1:]
-    features_dataframe['Sex_cat'] = features_dataframe['Sex'].apply(convertSex)
+    features_dataframe['Sex_cat'] = 'male'
+    features_dataframe.loc[features_dataframe['Sex'] == 'A92', 'Sex_cat'] = 'female'
     interval = (18, 25, 35, 60, 120)
 
     cats = ['Student', 'Young', 'Adult', 'Senior']
     features_dataframe["Age_cat"] = pd.cut(features_dataframe.Age, interval, labels=cats)
 
-    features_dataframe = features_dataframe.drop(columns=["Age","Sex"])
+    # features_dataframe = features_dataframe.drop(columns=["Age","Sex"])
     X, y = features_dataframe, label_dataframe
     orig_dataset = pd.merge(pd.DataFrame(X).reset_index(), pd.DataFrame(y).reset_index(), left_index=True, right_index=True, how="outer")
     orig_dataset = orig_dataset.drop(columns=["index_y", "index_x"])
+    orig_dataset["Risk"] = LabelEncoder().fit_transform(orig_dataset["Risk"])
     return orig_dataset
 
 dataset = load_dataset('german.csv')
 dataset_orig = data.StandardDataset(dataset,
     label_name='Risk',
     favorable_classes=[1],
-    protected_attribute_names=['Age_cat'],                                                                                                         
-    privileged_classes=[lambda x: x == 'Young' or x == 'Adult' or x=='Senior'],     
-    features_to_drop=['Sex_cat'],
+    protected_attribute_names=['Sex_cat'],                                                                                                         
+    privileged_classes=[lambda x: x == 'male'],     
+    features_to_drop=['Sex'],
     categorical_features=['Checking_account', 'credit_history', 'purpose', 'savings_account', 
         'employment_years', 'gurantors', 'Property', 'Installment_plans',
-        'housing', 'job', 'telephone', 'foreign_worker', 'Sex_cat']
+        'housing', 'job', 'telephone', 'foreign_worker','Age_cat']
     )
 
 dataset_orig_train, dataset_orig_vt = dataset_orig.split([0.6], shuffle=True)
 dataset_orig_valid, dataset_orig_test = dataset_orig_vt.split([0.5], shuffle=True)
-privileged_groups = [{'Age_cat': 1}]
-unprivileged_groups = [{'Age_cat': 0}]
+privileged_groups = [{'Sex_cat': 1}]
+unprivileged_groups = [{'Sex_cat': 0}]
 
 # Logistic regression classifier and predictions for training data
 scale_orig = StandardScaler()
@@ -135,6 +130,7 @@ cpp = CalibratedEqOddsPostprocessing(privileged_groups = privileged_groups,
                                      seed=randseed)
 cpp = cpp.fit(dataset_orig_valid, dataset_orig_valid_pred)
 
+
 dataset_transf_valid_pred = cpp.predict(dataset_orig_valid_pred)
 dataset_transf_test_pred = cpp.predict(dataset_orig_test_pred)
 
@@ -155,3 +151,6 @@ print("Difference in GFPR between unprivileged and privileged groups")
 print(cm_transf_test.difference(cm_transf_test.generalized_false_positive_rate))
 print("Difference in GFNR between unprivileged and privileged groups")
 print(cm_transf_test.difference(cm_transf_test.generalized_false_negative_rate))
+
+print("Accuracy before post-processing: ",lmod.score(X_test,dataset_orig_test.labels.ravel() ))
+print("Accuracy after post-processing: ", cm_transf_test.accuracy())
